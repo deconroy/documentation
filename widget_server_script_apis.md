@@ -5,7 +5,7 @@ Service Portal provides a set of convenience methods found on the global `$sp` o
 | :------ | :----------- |
 | [canReadRecord](#canReadRecord)(Mixed, *opt String*): boolean | Returns true if the user can read the specified GlideRecord. |
 | [getCatalogItem](#getCatalogItem)(String): Object | Returns a model and view model for a sc_cat_item or sc_cat_item_guide. |
-| [getDisplayValue](#getDisplayValue)(String): String | Like [getValue](#getValue) except that it returns the display value. |
+| [getDisplayValue](#getDisplayValue)(String): String | Returns a display value from a field on a record in this order: <br/>1. The widget's sp_instance* record<br/>2. 
 | [getField](#getField)(GlideRecord, String): Object | Returns {display_value, label, type, value} for a given field on a GlideRecord. |
 | [getFields](#getFields)(GlideRecord, String): Array | Like getField Checks the specified field names, and returns a comma seperated list of valid names. |
 | [getFieldsObject](#getFieldsObject)(GlideRecord, String) | Checks the specified field names, and returns an object containing the valid names. |
@@ -21,7 +21,7 @@ Service Portal provides a set of convenience methods found on the global `$sp` o
 | [getRecordValues](#getRecordValues) (Object, GlideRecord, String): void | Copies values for the specified field names from a GlideRecord into the data parameter. |
 | getStream(String, String): Object | Get the activity stream for a record. |
 | getUserInitials() | Returns the user's initials as a string. |
-| [getValue](#getValue)(String): Object | Returns a value from an object or GlideRecord in this order: <br/>1. The http request<br/> 2. The widget's sp_instance* record<br/>3. The current sp_portal record<br />or returns null |
+| [getValue](#getValue)(String): Object | Like [getDisplayValue](#getDisplayValue) except that it returns the value instead of the display value. |
 | [getValues](#getValues)(Object, String): void | Copies values from the request or instance into the data parameter. |
 | [getValues](#getValues)(Object): void | Copies values from the widget's sp_instance GlideRecord into the data parameter. |
 | [getWidget](#getWidget)(String, Object): Object | Returns a widget model for embedding a widget inside another widget. |
@@ -136,3 +136,180 @@ Result
 ![Screenshot](./assets/widget_server_script_apis/canReadRecord.png)
 
 > Notice how the list of items is different based on the logged in user
+
+<a name="getCatalogItem"></a> $sp.getCatalogItem()
+-----
+A quick way to get all of the data necessary to render and order a catalog item using \<sp-model />. If you just need to get a catalog item to show its picture or name, consider using GlideRecord to query the sp_cat_item table.
+
+The following example demonstrates how to use getCatalogItem and \<sp-model /> together.
+
+- $sp.getCatalogItem( sys_id ): Object
+	- **Parameters**
+		- (*String*) sys_id  
+		 The sys_id of the catalog item(sc_cat_item) or order guide(sc_cat_item_guide).
+	- **Returns**
+		- (*Object*) An object containing the catalog item variable model, view, sections, pricing and client scripts.
+
+Server Script
+
+```javascript
+(function() {
+	var sys_id = $sp.getParameter("sys_id")
+	data.catItem = $sp.getCatalogItem(sys_id);
+})();
+```
+<br/>
+Client Script
+
+```javascript
+function($http, spUtil) {
+	var c = this;
+	var submitting = false;
+	c.getIt = function() {
+		if (submitting) return;
+		$http.post(spUtil.getURL('sc_cat_item'), c.data.catItem).success(function(response) {
+			if (response.answer) {
+				c.req = response.answer;
+				c.req.page = c.req.table == 'sc_request' ? 'sc_request' : 'ticket';
+			}
+		});
+	}
+}
+```
+
+<br/>
+SCSS
+
+```css
+
+.img-bg {
+	padding: 5px;
+	background-color: $brand-primary;
+}
+
+.img-responsive {
+	margin: 0 auto;
+}
+
+.cat-icon {
+	display: block; 
+	margin: -40px auto 0;
+}
+```
+<br/>
+
+HTML Template
+
+```html
+<div class="col-sm-4">
+  <div class="panel panel-default">
+    <div class="img-bg">
+      <img ng-src="{{::data.catItem.picture}}" class="img-responsive" />
+    </div>
+    <span class="cat-icon fa fa-stack fa-lg fa-3x hidden-xs">
+      <i class="fa fa-circle fa-stack-2x text-success"></i>
+      <i class="fa fa-desktop fa-stack-1x fa-inverse"></i>
+    </span>
+    <div class="panel-body">
+      <p class="lead text-center">{{::data.catItem.name}}</p>
+      <ul class="list-unstyled">
+        <li class="text-center" ng-if="::data.catItem.price">${Price}: {{::data.catItem.price}}</li>
+      </ul>
+      <sp-model form-model="::data.catItem" mandatory="mandatory"></sp-model>
+      <p ng-if="c.req" class="text-center text-success">
+        ${Request created!} <a href="?id={{c.req.page}}&table={{c.req.table}}&sys_id={{c.req.sys_id}}">{{c.req.number}}</a>
+      </p>
+      <button ng-if="!c.req" class="btn btn-default btn-block" ng-click="c.getIt()">${Get it}</button>
+    </div>
+  </div>
+</div>
+```
+
+<br/>
+
+Result
+
+![Screenshot](./assets/widget_server_script_apis/getCatalogItem.png)
+
+
+<a name="getDisplayValue"></a> $sp.getDisplayValue()
+-----
+Returns the display value of a given field (if it exists and has a value) from either the widget's sp_instance or the sp_portal record. Refer to the following diagram:
+
+![Page map with widget instance](./assets/widget_server_script_apis/getDisplayValue_pagemap.png)
+
+This map visualizes a service portal page with one widget on it. Calling $sp.getDisplayValue("title") would return the display value of the title field on the widget's sp_instance record. If the title field didn't exist or was empty, then it would try the same operation on the the sp_portal record for the current portal context.
+
+> Note - Embedded widgets do not have sp_instance records.
+
+<br/>
+
+- $sp.getDisplayValue( fieldName ): String
+	- **Parameters**
+		- (*String*) fieldName
+		 The field name to get the display value of.
+	- **Returns**
+		- (*String*) A display value from either the sp_instance record or sp_portal record.
+
+<br/>
+Server Script
+
+```javascript
+(function() {
+	data.title = $sp.getDisplayValue("title");
+	data.catalog = $sp.getDisplayValue("sc_catalog");
+})();
+```
+
+<br/>
+HTML Template
+
+```html
+<div>
+	<h1>sp_instance.title: {{::data.title}}</h1>
+	<h1>sp_portal.sc_catalog: {{::data.catalog}}</h1>
+</div>
+```
+
+<br/>
+Result
+
+![Screenshot](./assets/widget_server_script_apis/getDisplayValue.png)
+
+
+<a name="getValue"></a> $sp.getValue()
+-----
+Returns the value of a given field (if it exists and has a value) from either the widget's sp_instance or the sp_portal record. See [getDisplayValue](#getDisplayValue) for more info.
+
+
+- $sp.getValue( fieldName ): Object
+	- **Parameters**
+		- (*String*) fieldName
+		 The field name to get the value of.
+	- **Returns**
+		- (*Object*) A value from either the sp_instance record or sp_portal record.
+
+<br/>
+Server Script
+
+```javascript
+(function() {
+	data.title = $sp.getValue("title");
+	data.catalog = $sp.getValue("sc_catalog");
+})();
+```
+
+<br/>
+HTML Template
+
+```html
+<div>
+	<h1>sp_instance.title: {{::data.title}}</h1>
+	<h1>sp_portal.sc_catalog: {{::data.catalog}}</h1>
+</div>
+```
+
+<br/>
+Result
+
+![Screenshot](./assets/widget_server_script_apis/getValue.png)
